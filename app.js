@@ -9,6 +9,7 @@
   var backlinks = {}; Object.keys(WK.p).forEach(function (id) { WK.p[id].cx.forEach(function (x) { (backlinks[x[0]] = backlinks[x[0]] || []).push(id); }); });
   var main = document.getElementById("main");
   var navEl = document.getElementById("nav");
+  var CR = null; // Cram module, created after helpers below
 
   /* ---------- helpers ---------- */
   function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]; }); }
@@ -61,7 +62,7 @@
   function bar(pr) { return '<div class="bar" role="img" aria-label="' + pr.done + ' of ' + pr.total + ' reviewed"><span style="width:' + pr.pct + '%"></span></div>'; }
 
   /* ---------- nav ---------- */
-  var NAV = [["#/", "Start"], ["#/topic/epi", "Epigenetics"], ["#/topic/clocks", "Clocks"], ["#/topic/plasticity", "Plasticity"], ["#/wiki", "Wiki"], ["#/connect", "Connections"], ["#/practice", "Essay prompts"], ["#/test", "Self-test"], ["#/glossary", "Glossary"]];
+  var NAV = [["#/", "Start"], ["#/topic/epi", "Epigenetics"], ["#/topic/clocks", "Clocks"], ["#/topic/plasticity", "Plasticity"], ["#/wiki", "Wiki"], ["#/connect", "Connections"], ["#/practice", "Essay prompts"], ["#/cram", "Cram"], ["#/test", "Self-test"], ["#/glossary", "Glossary"]];
   function renderNav(route) {
     navEl.innerHTML = NAV.map(function (n) {
       var cur = (n[0] === "#/" && (route === "" || route === "/")) || (n[0] !== "#/" && ("#" + route).indexOf(n[0]) === 0) ||
@@ -86,8 +87,8 @@
       '<li><strong>Skim a topic.</strong> Each paper has a one-paragraph summary. Open details for key points and how to use it in an answer.</li>' +
       '<li><strong>Go deep in the wiki.</strong> Every paper has a synthesized page (question, approach, findings, argument, limits, exam angles), and concept pages tie papers together.</li>' +
       '<li><strong>Read the connections.</strong> The threads page shows how papers talk to each other, which is what exam answers need.</li>' +
-      '<li><strong>Practice.</strong> Try an essay prompt, then quiz yourself with flashcards in either direction.</li></ol>' +
-      '<p style="margin-top:22px"><a class="btn" href="#/connect">Start with the big picture</a> <a class="btn ghost" href="#/wiki">Open the wiki</a> <a class="btn ghost" href="#/test">Go to self-test</a></p>';
+      '<li><strong>Practice.</strong> Try an essay prompt, then quiz yourself with flashcards in either direction, or jump into Cram for quick rounds with XP, streaks and badges.</li></ol>' +
+      '<p style="margin-top:22px"><a class="btn" href="#/connect">Start with the big picture</a> <a class="btn ghost" href="#/wiki">Open the wiki</a> <a class="btn orange" href="#/cram">Start cramming</a> <a class="btn ghost" href="#/test">Go to self-test</a></p>';
   }
 
   var topicState = { theme: "All", sort: "curated", unreviewed: false };
@@ -273,16 +274,25 @@
     }
     else if (parts[0] === "connect") { html = viewConnect(); title = "Connections | " + title; }
     else if (parts[0] === "practice") { html = viewPractice(); title = "Essay prompts | " + title; }
+    else if (parts[0] === "cram" && CR) { html = CR.view(); title = "Cram | " + title; }
     else if (parts[0] === "test") { html = viewTest(); title = "Self-test | " + title; }
     else if (parts[0] === "glossary") { html = viewGlossary(); title = "Glossary | " + title; }
     else if (parts[0] === "search") { html = viewSearch(r.slice("/search/".length)); title = "Search | " + title; }
     else html = viewNotFound();
     main.innerHTML = html; document.title = title; renderNav(r);
+    if (parts[0] === "cram" && CR) CR.after();
     if (scrollTo) { var el = document.getElementById(scrollTo); if (el) { el.scrollIntoView({ block: "center" }); el.classList.add("flash"); } }
     else if (!route.keepScroll) { window.scrollTo(0, 0); }
     route.keepScroll = false;
   }
+  function refresh() { route.keepScroll = false; route(); }
   function rerender() { route.keepScroll = true; var y = window.scrollY; route(); window.scrollTo(0, y); }
+
+  /* ---------- cram ---------- */
+  if (window.CramModule) {
+    CR = window.CramModule({ G: G, WK: WK, esc: esc, store: store, papers: papers, byId: byId, topics: topics, topicById: topicById,
+      concepts: concepts, conceptBy: conceptBy, rerender: function () { rerender(); }, refresh: function () { refresh(); } });
+  }
 
   /* ---------- events ---------- */
   main.addEventListener("change", function (e) {
@@ -297,6 +307,8 @@
     else if (t.id === "t-mode") { testPrefs.mode = t.value; if (deck) { deck.shown = false; } rerender(); }
   });
   main.addEventListener("click", function (e) {
+    var cr = e.target.closest("[data-cr]");
+    if (cr && CR && !cr.disabled) { CR.click(cr); return; }
     var b = e.target.closest("button"); if (!b) return;
     if (b.dataset.theme) { topicState.theme = b.dataset.theme; rerender(); }
     else if (b.id === "reset-progress") { if (b.dataset.armed) { reviewed = []; store.set("qual1.reviewed", reviewed); rerender(); } else { b.dataset.armed = "1"; b.textContent = "Click again to clear all"; } }
@@ -313,6 +325,7 @@
     e.preventDefault(); var q = document.getElementById("q").value.trim();
     location.hash = q ? "#/search/" + encodeURIComponent(q) : "#/";
   });
+  document.addEventListener("keydown", function (e) { if (CR && current.route === "/cram") CR.key(e); });
   window.addEventListener("hashchange", route);
   window.addEventListener("beforeprint", function () { document.querySelectorAll("details.paper").forEach(function (d) { d.open = true; }); });
   route();
