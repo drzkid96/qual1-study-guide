@@ -31,11 +31,37 @@
   }
   var chevron = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 6l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
+
+  /* ---------- key-term highlighting ---------- */
+  var KEYTERMS = ["DNA methylation", "CpG", "DNMT3A", "DNMT3B", "HDAC", "histone modification", "histone mark", "H3K4me3", "H3K9me3", "H3K27me3", "chromatin", "epigenotype",
+    "epigenetic clock", "epigenetic age acceleration", "age acceleration", "pace of aging", "chronological age", "biological age", "phenotypic age", "PhenoAge", "GrimAge", "DunedinPACE",
+    "elastic net", "cell-type heterogeneity", "survival bias", "developmental plasticity", "critical period", "sensitive period", "DOHaD", "thrifty phenotype",
+    "predictive adaptive response", "mismatch", "genetic assimilation", "genetic accommodation", "genomic imprinting", "imprinted gene", "imprinting", "metastable epiallele", "agouti",
+    "transposable element", "intergenerational", "transgenerational", "germline", "reprogramming", "small RNA", "miRNA", "glucocorticoid receptor", "FKBP5",
+    "gene-by-environment", "resilience", "life history", "natural experiment", "Dutch Hunger Winter", "X inactivation", "hypoxia"];
+  KEYTERMS.sort(function (a, b) { return b.length - a.length; });
+  var KT_RE = new RegExp("(^|[^A-Za-z0-9])(" + KEYTERMS.map(function (t) { return t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }).join("|") + ")((?:e?s)?)(?![A-Za-z0-9])", "ig");
+  /* Escapes text and bolds the first use of each key term in this block (max 4), so emphasis stays selective. */
+  function kt(text, max) {
+    text = String(text == null ? "" : text); max = max || 4;
+    var out = "", last = 0, seen = {}, n = 0, m;
+    KT_RE.lastIndex = 0;
+    while ((m = KT_RE.exec(text)) && n < max) {
+      var key = m[2].toLowerCase(); if (seen[key]) continue;
+      seen[key] = 1; n++;
+      var start = m.index + m[1].length;
+      out += esc(text.slice(last, start)) + '<strong class="kt">' + esc(m[2] + m[3]) + '</strong>';
+      last = start + m[2].length + m[3].length;
+    }
+    return out + esc(text.slice(last));
+  }
+  function ktList(items, max) { return '<ul>' + items.map(function (x) { return '<li>' + kt(x, max || 2) + '</li>'; }).join("") + '</ul>'; }
+
   /* ---------- components ---------- */
   function paperCard(p, opts) {
     opts = opts || {};
     var l = paperLink(p);
-    var hl = opts.hl || function (s) { return esc(s); };
+    var hl = opts.hl || function (s) { return kt(s, 3); };
     return '<details class="paper' + (isReviewed(p.id) ? ' reviewed' : '') + '" id="' + p.id + '"' + (opts.open ? ' open' : '') + '>' +
       '<summary><div class="p-top"><span class="p-cite">' + hl(p.cite) + '</span></div>' +
       '<p class="p-sum">' + hl(p.summary) + '</p>' +
@@ -128,7 +154,7 @@
   }
   function viewGlossary() {
     return '<span class="kicker">Reference</span><h1>Glossary</h1><dl class="gloss">' +
-      G.glossary.map(function (g) { return '<div><dt>' + esc(g.term) + '</dt><dd>' + esc(g.def_) + '</dd></div>'; }).join("") + '</dl>';
+      G.glossary.map(function (g) { return '<div><dt>' + esc(g.term) + '</dt><dd>' + kt(g.def_, 2) + '</dd></div>'; }).join("") + '</dl>';
   }
 
   /* ---------- self-test ---------- */
@@ -165,7 +191,7 @@
 
 
   /* ---------- wiki ---------- */
-  function list(items) { return '<ul>' + items.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join("") + '</ul>'; }
+  function list(items) { return ktList(items, 2); }
   function wikiLink(id) { return '<a href="#/wiki/p/' + id + '">' + esc(byId[id].cite) + '</a>'; }
   function conceptPills(slugs) {
     return '<ul class="pill-list">' + slugs.map(function (sl) { return '<li><a href="#/wiki/c/' + sl + '">' + esc(conceptBy[sl].name) + '</a></li>'; }).join("") + '</ul>';
@@ -191,9 +217,9 @@
     var bl = (backlinks[id] || []).filter(function (x) { return x !== id; });
     return '<span class="kicker"><a href="#/wiki">Wiki</a> &middot; ' + esc(t.name) + ' &middot; ' + p.year + '</span><h1>' + esc(p.cite) + '</h1>' +
       '<p class="lead">' + esc(p.title) + '</p><p class="p-meta">' + esc(p.authors) + ' &middot; ' + esc(p.venue) + ' &middot; ' + esc(p.kind) + '</p>' +
-      '<div class="callout"><strong>Takeaway</strong><p>' + esc(w.t) + '</p></div>' +
-      '<h2>Background</h2><p>' + esc(w.bg) + '</p><h2>Approach</h2><p>' + esc(w.ap) + '</p>' +
-      '<h2>Findings</h2>' + list(w.f) + '<h2>Argument</h2><p>' + esc(w.arg) + '</p>' +
+      '<div class="callout take"><strong>Takeaway</strong><p>' + kt(w.t) + '</p></div>' +
+      '<h2>Background</h2><p>' + kt(w.bg) + '</p><h2>Approach</h2><p>' + kt(w.ap) + '</p>' +
+      '<h2>Findings</h2>' + list(w.f) + '<h2>Argument</h2><p class="arg">' + kt(w.arg) + '</p>' +
       '<div class="two"><div><h3>Strengths</h3>' + list(w.st) + '</div><div><h3>Limits</h3>' + list(w.lm) + '</div></div>' +
       (w.n.length ? '<h3>Numbers worth remembering</h3>' + list(w.n) : '') +
       '<h2>Concepts</h2>' + conceptPills(w.terms) +
@@ -216,8 +242,8 @@
     var c = conceptBy[slug]; if (!c) return viewNotFound();
     var rel = {}; c.papers.forEach(function (id) { WK.p[id].terms.forEach(function (t) { if (t !== slug) rel[t] = (rel[t] || 0) + 1; }); });
     var relList = Object.keys(rel).sort(function (a, b) { return rel[b] - rel[a]; }).slice(0, 6);
-    return '<span class="kicker"><a href="#/wiki/concepts">Concepts</a> &middot; ' + esc(c.group) + '</span><h1>' + esc(c.name) + '</h1><p class="lead">' + esc(c.short) + '</p>' +
-      '<p>' + esc(c.body) + '</p>' + (c.contrast ? '<div class="callout"><strong>Watch out</strong><p>' + esc(c.contrast) + '</p></div>' : '') +
+    return '<span class="kicker"><a href="#/wiki/concepts">Concepts</a> &middot; ' + esc(c.group) + '</span><h1>' + esc(c.name) + '</h1><div class="def"><span class="def-l">In short</span><p>' + kt(c.short, 2) + '</p></div>' +
+      '<p>' + kt(c.body, 5) + '</p>' + (c.contrast ? '<div class="callout"><strong>Watch out</strong><p>' + kt(c.contrast) + '</p></div>' : '') +
       (c.exam.length ? '<h2>Exam angles</h2>' + list(c.exam) : '') +
       '<h2>Papers (' + c.papers.length + ')</h2><ul class="wiki-list">' + c.papers.map(function (id) {
         return '<li><a class="w-cite" href="#/wiki/p/' + id + '">' + esc(byId[id].cite) + '</a><span class="w-take">' + esc(WK.p[id].t) + '</span></li>'; }).join("") + '</ul>' +
@@ -291,7 +317,7 @@
   /* ---------- cram ---------- */
   if (window.CramModule) {
     CR = window.CramModule({ G: G, WK: WK, esc: esc, store: store, papers: papers, byId: byId, topics: topics, topicById: topicById,
-      concepts: concepts, conceptBy: conceptBy, rerender: function () { rerender(); }, refresh: function () { refresh(); } });
+      concepts: concepts, conceptBy: conceptBy, kt: kt, ktList: ktList, paperLink: paperLink, rerender: function () { rerender(); }, refresh: function () { refresh(); } });
   }
 
   /* ---------- events ---------- */
